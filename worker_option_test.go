@@ -94,7 +94,7 @@ func TestWithWorkerLogger(t *testing.T) {
 }
 
 func TestWithWorkerPollStrategy(t *testing.T) {
-	workerWithWorkerPollStrategy, err := NewWorker(nil, dummyWM, WithWorkerPollStrategy(RunAtPollStrategy))
+	workerWithWorkerPollStrategy, err := NewWorker(nil, dummyWM, WithWorkerPollStrategy(RunAtPollStrategy, nil))
 	require.NoError(t, err)
 	assert.Equal(t, RunAtPollStrategy, workerWithWorkerPollStrategy.pollStrategy)
 }
@@ -182,7 +182,7 @@ func TestWithPoolLogger(t *testing.T) {
 }
 
 func TestWithPoolPollStrategy(t *testing.T) {
-	workerPoolWithPoolPollStrategy, err := NewWorkerPool(nil, dummyWM, 2, WithPoolPollStrategy(RunAtPollStrategy))
+	workerPoolWithPoolPollStrategy, err := NewWorkerPool(nil, dummyWM, 2, WithPoolPollStrategy(RunAtPollStrategy, nil))
 	require.NoError(t, err)
 	assert.Equal(t, RunAtPollStrategy, workerPoolWithPoolPollStrategy.pollStrategy)
 }

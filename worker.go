@@ -34,6 +34,8 @@ const (
 	// RunAtPollStrategy cares about the scheduled time first to lock earliest to execute jobs first even if there
 	// are ones with a higher priority scheduled to a later time but already eligible for execution
 	RunAtPollStrategy PollStrategy = "OrderByRunAtPriority"
+	// CustomPollStrategy gives the user the responsibility to decide which job to run next
+	CustomPollStrategy PollStrategy = "CustomPriority"
 )
 
 // WorkFunc is the handler function that performs the Job. If an error is returned, the Job
@@ -52,6 +54,8 @@ type WorkFunc func(ctx context.Context, j *Job) error
 //
 // Depending on the event err parameter may be empty or not - check the event description for its meaning.
 type HookFunc func(ctx context.Context, j *Job, err error)
+
+type JobHookFunc func(ctx context.Context, tx adapter.Tx, log adapter.Logger, args ...any) ([]any, error)
 
 // WorkMap is a map of Job names to WorkFuncs that are used to perform Jobs of a
 // given type.
@@ -122,6 +126,10 @@ func NewWorker(c *Client, wm WorkMap, options ...WorkerOption) (*Worker, error) 
 	switch w.pollStrategy {
 	case RunAtPollStrategy:
 		w.pollFunc = w.c.LockNextScheduledJob
+	case PriorityPollStrategy:
+		w.pollFunc = w.c.LockJob
+	case CustomPollStrategy:
+		// function already set
 	default:
 		w.pollFunc = w.c.LockJob
 	}
@@ -349,17 +357,18 @@ func (w *Worker) recoverPanic(ctx context.Context, logger adapter.Logger, j *Job
 // WorkerPool is a pool of Workers, each working jobs from the queue
 // at the specified interval using the WorkMap.
 type WorkerPool struct {
-	wm           WorkMap
-	interval     time.Duration
-	queue        string
-	c            *Client
-	workers      []*Worker
-	id           string
-	logger       adapter.Logger
-	mu           sync.Mutex
-	running      bool
-	pollStrategy PollStrategy
-	jobTTL       time.Duration
+	wm             WorkMap
+	interval       time.Duration
+	queue          string
+	c              *Client
+	workers        []*Worker
+	id             string
+	logger         adapter.Logger
+	mu             sync.Mutex
+	running        bool
+	pollStrategy   PollStrategy
+	customPollFunc CustomPollFunc
+	jobTTL         time.Duration
 
 	graceful    bool
 	gracefulCtx func() context.Context
@@ -411,7 +420,7 @@ func NewWorkerPool(c *Client, wm WorkMap, poolSize int, options ...WorkerPoolOpt
 			WithWorkerQueue(w.queue),
 			WithWorkerID(fmt.Sprintf("%s/worker-%d", w.id, i)),
 			WithWorkerLogger(w.logger),
-			WithWorkerPollStrategy(w.pollStrategy),
+			WithWorkerPollStrategy(w.pollStrategy, w.customPollFunc),
 			WithWorkerTracer(w.tracer),
 			WithWorkerMeter(w.meter),
 			WithWorkerHooksJobLocked(w.hooksJobLocked...),

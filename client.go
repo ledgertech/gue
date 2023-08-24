@@ -38,6 +38,9 @@ type Client struct {
 
 	mEnqueue metric.Int64Counter
 	mLockJob metric.Int64Counter
+
+	hookBeforeAcquireJob JobHookFunc
+	hookReleaseJob       HookFunc
 }
 
 // NewClient creates a new Client that uses the pgx pool.
@@ -234,7 +237,30 @@ func (c *Client) execLockJob(ctx context.Context, handleErrNoRows bool, sql stri
 		return nil, err
 	}
 
-	j := Job{tx: tx, backoff: c.backoff, logger: c.logger}
+	if c.hookBeforeAcquireJob != nil {
+		args, err = c.hookBeforeAcquireJob(ctx, tx, c.logger, args...)
+		if err != nil {
+			if errors.Is(err, adapter.ErrNoRows) {
+				c.logger.Debug("Acquire hook returned no rows, abort")
+			} else {
+				c.mLockJob.Add(ctx, 1, metric.WithAttributes(attrJobType.String(""), attrSuccess.Bool(false)))
+			}
+
+			rbErr := tx.Rollback(ctx)
+			// TODO: why
+			if handleErrNoRows && err == adapter.ErrNoRows {
+				return nil, rbErr
+			}
+
+			if errors.Is(err, adapter.ErrNoRows) {
+				err = nil
+			}
+
+			return nil, err
+		}
+	}
+
+	j := Job{tx: tx, backoff: c.backoff, logger: c.logger, hookReleaseJob: c.hookReleaseJob}
 
 	err = tx.QueryRow(ctx, sql, args...).Scan(
 		&j.ID,

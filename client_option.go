@@ -37,3 +37,15 @@ func WithClientMeter(meter metric.Meter) ClientOption {
 		c.meter = meter
 	}
 }
+
+func WithHookBeforeAcquireJob(hook JobHookFunc) ClientOption {
+	return func(c *Client) {
+		c.hookBeforeAcquireJob = hook
+	}
+}
+
+func WithHookBeforeReleaseJob(hook HookFunc) ClientOption {
+	return func(c *Client) {
+		c.hookReleaseJob = hook
+	}
+}

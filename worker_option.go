@@ -96,10 +96,13 @@ func WithWorkerHooksJobDone(hooks ...HookFunc) WorkerOption {
 	}
 }
 
+type CustomPollFunc func(context.Context, string) (*Job, error)
+
 // WithWorkerPollStrategy overrides default poll strategy with given value
-func WithWorkerPollStrategy(s PollStrategy) WorkerOption {
+func WithWorkerPollStrategy(s PollStrategy, f CustomPollFunc) WorkerOption {
 	return func(w *Worker) {
 		w.pollStrategy = s
+		w.pollFunc = pollFunc(f)
 	}
 }
 
@@ -166,9 +169,10 @@ func WithPoolLogger(logger adapter.Logger) WorkerPoolOption {
 }
 
 // WithPoolPollStrategy overrides default poll strategy with given value
-func WithPoolPollStrategy(s PollStrategy) WorkerPoolOption {
+func WithPoolPollStrategy(s PollStrategy, f CustomPollFunc) WorkerPoolOption {
 	return func(w *WorkerPool) {
 		w.pollStrategy = s
+		w.customPollFunc = f
 	}
 }
 

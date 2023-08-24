@@ -60,11 +60,12 @@ type Job struct {
 	// being updated when the current Job run errored. This field supposed to be used mostly for the debug reasons.
 	LastError sql.NullString
 
-	mu      sync.Mutex
-	deleted bool
-	tx      adapter.Tx
-	backoff Backoff
-	logger  adapter.Logger
+	mu             sync.Mutex
+	deleted        bool
+	tx             adapter.Tx
+	backoff        Backoff
+	logger         adapter.Logger
+	hookReleaseJob HookFunc
 }
 
 // Tx returns DB transaction that this job is locked to. You may use
@@ -106,6 +107,10 @@ func (j *Job) Done(ctx context.Context) error {
 	if j.tx == nil {
 		// already marked as done
 		return nil
+	}
+
+	if j.hookReleaseJob != nil {
+		j.hookReleaseJob(ctx, j, nil)
 	}
 
 	if err := j.tx.Commit(ctx); err != nil {
